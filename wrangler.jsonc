@@ -1,6 +1,6 @@
 {
   "$schema": "./node_modules/wrangler/config-schema.json",
-  "name": "cffk",
+  "name": "lingdu-shop",
   "compatibility_date": "2026-03-12",
   "main": "vike:server-entry",
   "send_email": [
@@ -13,18 +13,20 @@
       "binding": "DB",
       "database_name": "cffk_db",
       "migrations_dir": "database/migrations",
-      // "database_id": "6ccaa772-9379-494a-8548-7a1bb74e30da" // 一键部署必须注释/
+      "database_id": "2481bf75-c225-450f-8aed-f2a2147dce77"
     }
   ],
   "compatibility_flags": [
     "nodejs_compat",
-     "global_fetch_strictly_public"
+    "global_fetch_strictly_public"
   ],
   "triggers": {
-    "crons": ["* * * * *"]
+    "crons": [
+      "* * * * *"
+    ]
   },
   "observability": {
-		"enabled": true,
-		"head_sampling_rate": 0.1
-	},
+    "enabled": true,
+    "head_sampling_rate": 0.1
+  }
 }
