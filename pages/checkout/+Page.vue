@@ -18,14 +18,14 @@
           <template v-else-if="order">
             <dl class="grid grid-cols-2 gap-x-6 gap-y-5 text-sm sm:grid-cols-3">
               <div><dt class="text-xs text-muted-foreground">商品</dt><dd class="mt-1 font-medium">{{ order.productName }}</dd></div>
-              <div><dt class="text-xs text-muted-foreground">订单金额</dt><dd class="mt-1 font-medium">¥{{ order.amount }}</dd></div>
-              <div v-if="payableAmount !== null"><dt class="text-xs text-muted-foreground">扫码支付</dt><dd class="mt-1 font-medium">¥{{ formatCentsAsYuan(payableAmount) }}</dd></div>
+              <div><dt class="text-xs text-muted-foreground">订单金额</dt><dd class="mt-1 font-medium">{{  order.amount  }} USDT</dd></div>
+              <div v-if="payableAmount !== null"><dt class="text-xs text-muted-foreground">扫码支付</dt><dd class="mt-1 font-medium">{{  formatCentsAsYuan(payableAmount)  }} USDT</dd></div>
               <div><dt class="text-xs text-muted-foreground">支付状态</dt><dd class="mt-1 font-medium">{{ paymentStatusLabel(order.paymentStatus) }}</dd></div>
             </dl>
             <div v-if="order.paymentStatus === 'UNPAID'" class="grid justify-items-center gap-4 border-t pt-6 text-center">
               <template v-if="isQrPaymentOrder(order)">
                 <div v-if="isPerpayQrPaymentOrder(order) && payableAmount !== null" class="w-full rounded-xl border-2 border-primary/35 px-5 py-4 text-center shadow-sm" aria-live="polite">
-                  <p class="mt-1 text-4xl font-bold tracking-tight text-primary sm:text-5xl"><span class="text-2xl sm:text-3xl">¥</span>{{ formatCentsAsYuan(payableAmount) }}</p>
+                  <p class="mt-1 text-4xl font-bold tracking-tight text-primary sm:text-5xl"><span class="text-2xl sm:text-3xl">USDT </span>{{ formatCentsAsYuan(payableAmount) }}</p>
                   <p class="mt-3 text-sm font-medium leading-6 text-foreground">请按此金额付款，金额必须完全一致</p>
                 </div>
                 <p class="font-medium">请使用支付宝扫码付款</p>
