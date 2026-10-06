@@ -58,6 +58,28 @@ function result(provider: PaymentProviderKind, values: Partial<PaymentNotifyResu
   return { provider, ...values };
 }
 
+async function queryHashpay(config: ReturnType<typeof parseHashpayConfig>, orderNo: string, paymentOrderNo?: string): Promise<PaymentNotifyResult> {
+  const failed = () => result("HASHPAY", { verified: false, orderNo, paymentOrderNo, status: "PENDING", message: "HASHPAY_QUERY_FAILED" });
+  if (!paymentOrderNo) return failed();
+  try {
+    const path = `/api/order/${encodeURIComponent(paymentOrderNo)}`;
+    const timestamp = Math.floor(Date.now() / 1000).toString();
+    const key = await importPem(config.privateKey, { name: "RSASSA-PKCS1-v1_5", hash: "SHA-256" }, "sign");
+    const signature = base64(await crypto.subtle.sign("RSASSA-PKCS1-v1_5", key, new TextEncoder().encode(`GET\n${path}\n${timestamp}\n`)));
+    const response = await fetch(`${config.baseUrl.replace(/\/+$/, "")}${path}`, {
+      headers: { "X-Merchant-Id": config.merchantId, "X-Timestamp": timestamp, "X-Signature": signature },
+      redirect: "error",
+      signal: AbortSignal.timeout(8000),
+    });
+    if (!response.ok) return failed();
+    const order = await response.json() as Record<string, unknown>;
+    const value = Number(order.amount);
+    const currency = typeof order.currency === "string" ? order.currency.toUpperCase() : "";
+    if (order.id !== paymentOrderNo || order.merchantId !== config.merchantId || order.merchantNo !== orderNo || !Number.isFinite(value) || value <= 0 || currency !== config.currency.toUpperCase() || !["pending", "paid", "expired"].includes(String(order.status))) return failed();
+    return result("HASHPAY", { verified: true, orderNo, paymentOrderNo, amount: Math.round(value * 100), currency, status: order.status === "paid" ? "PAID" : order.status === "expired" ? "FAILED" : "PENDING", message: "HASHPAY_QUERY" });
+  } catch { return failed(); }
+}
+
 export function createProviderAdapter(provider: PaymentProviderKind, config: Record<string, unknown>): PaymentAdapter {
   const json = JSON.stringify(config);
   if (provider === "ALIPAY") return {
@@ -97,7 +119,20 @@ export function createProviderAdapter(provider: PaymentProviderKind, config: Rec
   const parsed = parseHashpayConfig(json);
   return {
     create: async (input) => { const privateKey = await importPem(parsed.privateKey, { name: "RSASSA-PKCS1-v1_5", hash: "SHA-256" }, "sign"); const path = "/api/merchant/new"; const timestamp = Math.floor(Date.now() / 1000).toString(); const body = JSON.stringify({ merchantNo: input.orderNo, amount: input.amount / 100, currency: parsed.currency, description: input.subject, return_url: input.returnUrl }); const signature = base64(await crypto.subtle.sign("RSASSA-PKCS1-v1_5", privateKey, new TextEncoder().encode(`POST\n${path}\n${timestamp}\n${body}`))); const response = await fetch(`${parsed.baseUrl.replace(/\/+$/, "")}${path}`, { method: "POST", headers: { "content-type": "application/json", "X-Merchant-Id": parsed.merchantId, "X-Timestamp": timestamp, "X-Signature": signature }, body }); const text = await response.text(); let data: { checkoutUrl?: string; order?: { id?: string } }; try { data = JSON.parse(text); } catch { throw new Error("HASHPAY_INVALID_RESPONSE"); } if (!response.ok || !data.checkoutUrl || !data.order?.id) throw new Error("HASHPAY_CREATE_FAILED"); return { mode: "redirect", url: data.checkoutUrl, paymentOrderNo: data.order.id }; },
-    verify: async ({ rawBody = "" }) => { try { const decrypted = await decryptHashpay(rawBody, parsed.privateKey); if (Math.abs(Date.now() / 1000 - decrypted.timestamp) > 300) return result(provider, { verified: false, status: "FAILED", message: "HASHPAY_TIMESTAMP_EXPIRED" }); const payload = decrypted.payload; const merchantNo = typeof payload.merchantNo === "string" ? payload.merchantNo.trim() : ""; const paymentAmount = Number(payload.amount); if (!merchantNo || !Number.isFinite(paymentAmount) || paymentAmount <= 0) throw new Error("HASHPAY_CALLBACK_INVALID"); return result(provider, { verified: true, orderNo: merchantNo, paymentOrderNo: payload.orderId ? String(payload.orderId) : undefined, amount: Math.round(paymentAmount * 100), currency: typeof payload.currency === "string" ? payload.currency.toUpperCase() : undefined, status: payload.status === "paid" ? "PAID" : payload.status === "expired" ? "FAILED" : "PENDING", message: "HASHPAY_CALLBACK" }); } catch { return result(provider, { verified: false, status: "FAILED", message: "HASHPAY_CALLBACK_INVALID" }); } },
+    verify: async ({ rawBody = "" }) => {
+      try {
+        const decrypted = await decryptHashpay(rawBody, parsed.privateKey);
+        if (Math.abs(Date.now() / 1000 - decrypted.timestamp) > 300) return result(provider, { verified: false, status: "FAILED", message: "HASHPAY_TIMESTAMP_EXPIRED" });
+        const payload = decrypted.payload;
+        const merchantNo = typeof payload.merchantNo === "string" ? payload.merchantNo.trim() : "";
+        if (!merchantNo || typeof payload.orderId !== "string") throw new Error("HASHPAY_CALLBACK_INVALID");
+        // Encryption protects confidentiality; confirm payment with the gateway itself.
+        const confirmed = await queryHashpay(parsed, merchantNo, payload.orderId);
+        if (confirmed.amount !== Math.round(Number(payload.amount) * 100) || confirmed.currency !== String(payload.currency).toUpperCase()) return result(provider, { verified: false, status: "FAILED", message: "HASHPAY_CALLBACK_MISMATCH" });
+        return confirmed;
+      } catch { return result(provider, { verified: false, status: "FAILED", message: "HASHPAY_CALLBACK_INVALID" }); }
+    },
+    query: async ({ orderNo, paymentOrderNo }) => queryHashpay(parsed, orderNo, paymentOrderNo),
   };
 }
 
