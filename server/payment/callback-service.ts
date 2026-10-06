@@ -51,7 +51,8 @@ export class PaymentCallbackService {
       && record.paymentStatus !== "FAILED"
       && result.status === "PAID";
     if (!callbackMatches) {
-      await logs.writeBestEffort({ orderId: record?.id, provider, orderNo: result.orderNo, paymentOrderNo: result.paymentOrderNo, eventType: "NOTIFY", verifyStatus: "FAILED", message: !result.verified ? "PAYMENT_CALLBACK_VERIFY_FAILED" : "PAYMENT_CALLBACK_INVALID", payload: input.payload });
+      const reason = provider === "HASHPAY" && /^HASHPAY_[A-Z0-9_]+$/.test(result.message ?? "") ? `:${result.message}` : "";
+      await logs.writeBestEffort({ orderId: record?.id, provider, orderNo: result.orderNo, paymentOrderNo: result.paymentOrderNo, eventType: "NOTIFY", verifyStatus: "FAILED", message: !result.verified ? `PAYMENT_CALLBACK_VERIFY_FAILED${reason}` : "PAYMENT_CALLBACK_INVALID", payload: input.payload });
       return this.response(provider, false, input);
     }
     if (!record || !result.orderNo || result.amount === undefined) return this.response(provider, false, input);
