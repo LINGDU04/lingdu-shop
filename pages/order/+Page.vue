@@ -32,8 +32,8 @@
                   </VeeField>
                   <VeeField v-slot="{ componentField, errors }" name="email" :validate-on-input="true">
                     <Field :data-invalid="errors.length > 0">
-                      <FieldLabel for="order-email">下单邮箱</FieldLabel>
-                      <Input id="order-email" v-bind="componentField" type="email" autocomplete="email" :aria-invalid="errors.length > 0" />
+                      <FieldLabel for="order-email">下单联系方式</FieldLabel>
+                      <Input id="order-email" v-bind="componentField" type="text" autocomplete="off" :aria-invalid="errors.length > 0" />
                       <FieldError v-if="errors.length" :errors="errors" />
                     </Field>
                   </VeeField>
@@ -99,7 +99,7 @@
             <CardContent class="flex min-h-0 flex-col gap-6 overflow-y-auto pt-6 text-sm">
               <dl class="grid grid-cols-2 gap-x-6 gap-y-5 sm:grid-cols-4">
                 <div><dt class="text-xs text-muted-foreground">数量</dt><dd class="mt-1 font-medium">{{ result.quantity }}</dd></div>
-                <div><dt class="text-xs text-muted-foreground">金额</dt><dd class="mt-1 font-medium">¥{{ result.amount }}</dd></div>
+                <div><dt class="text-xs text-muted-foreground">金额</dt><dd class="mt-1 font-medium">{{  result.amount  }} USDT</dd></div>
                 <div><dt class="text-xs text-muted-foreground">支付状态</dt><dd class="mt-1 font-medium">{{ paymentStatusLabel(result.paymentStatus) }}</dd></div>
                 <div><dt class="text-xs text-muted-foreground">发货状态</dt><dd class="mt-1 font-medium">{{ deliveryStatusLabel(result.deliveryStatus) }}</dd></div>
               </dl>
@@ -215,7 +215,7 @@ const isFaceToFacePayment = computed(() => result.value?.paymentChannel === "fac
 const { handleSubmit, isSubmitting: querySubmitting, setFieldValue } = useForm({
   validationSchema: toTypedSchema(z.object({
     orderNo: z.string().trim().min(1, "请输入订单号。"),
-    email: z.string().trim().email("请输入有效的下单邮箱。"),
+    email: z.string().trim().min(1, "请输入下单时填写的联系方式。"),
   })),
   initialValues: { orderNo: "", email: "" },
 });
@@ -353,7 +353,7 @@ async function queryOrder(input: { orderNo: string; email?: string }) {
   try {
     const record = await runTelefunc(() => onQueryOrder(input), { notifyError: false });
     if (!record) {
-      error.value = input.email ? "订单不存在，或下单邮箱不匹配。" : "未找到当前账户下的该订单。";
+      error.value = input.email ? "订单不存在，或下单联系方式不匹配。" : "未找到当前账户下的该订单。";
       return;
     }
     result.value = record;
