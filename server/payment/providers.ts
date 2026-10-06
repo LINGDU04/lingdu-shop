@@ -61,23 +61,29 @@ function result(provider: PaymentProviderKind, values: Partial<PaymentNotifyResu
 async function queryHashpay(config: ReturnType<typeof parseHashpayConfig>, orderNo: string, paymentOrderNo?: string): Promise<PaymentNotifyResult> {
   const failed = (reason = "FAILED") => result("HASHPAY", { verified: false, orderNo, paymentOrderNo, status: "PENDING", message: `HASHPAY_QUERY_${reason}` });
   if (!paymentOrderNo) return failed();
+  let stage = "SIGN";
   try {
     const path = `/api/order/${encodeURIComponent(paymentOrderNo)}`;
     const timestamp = Math.floor(Date.now() / 1000).toString();
     const key = await importPem(config.privateKey, { name: "RSASSA-PKCS1-v1_5", hash: "SHA-256" }, "sign");
     const signature = base64(await crypto.subtle.sign("RSASSA-PKCS1-v1_5", key, new TextEncoder().encode(`GET\n${path}\n${timestamp}\n`)));
+    stage = "FETCH";
     const response = await fetch(`${config.baseUrl.replace(/\/+$/, "")}${path}`, {
       headers: { "X-Merchant-Id": config.merchantId, "X-Timestamp": timestamp, "X-Signature": signature },
       redirect: "error",
       signal: AbortSignal.timeout(8000),
     });
     if (!response.ok) return failed(`HTTP_${response.status}`);
+    stage = "JSON";
     const order = await response.json() as Record<string, unknown>;
     const value = Number(order.amount);
     const currency = typeof order.currency === "string" ? order.currency.toUpperCase() : "";
     if (order.id !== paymentOrderNo || order.merchantId !== config.merchantId || order.merchantNo !== orderNo || !Number.isFinite(value) || value <= 0 || currency !== config.currency.toUpperCase() || !["pending", "paid", "expired"].includes(String(order.status))) return failed("RESPONSE_MISMATCH");
     return result("HASHPAY", { verified: true, orderNo, paymentOrderNo, amount: Math.round(value * 100), currency, status: order.status === "paid" ? "PAID" : order.status === "expired" ? "FAILED" : "PENDING", message: "HASHPAY_QUERY" });
-  } catch { return failed(); }
+  } catch (error) {
+    const name = error instanceof Error ? error.name.replace(/[^A-Za-z0-9_]/g, "").toUpperCase() : "UNKNOWN";
+    return failed(`${stage}_${name}`);
+  }
 }
 
 export function createProviderAdapter(provider: PaymentProviderKind, config: Record<string, unknown>): PaymentAdapter {
