@@ -70,7 +70,8 @@ async function queryHashpay(config: ReturnType<typeof parseHashpayConfig>, order
     stage = "FETCH";
     const response = await fetch(`${config.baseUrl.replace(/\/+$/, "")}${path}`, {
       headers: { "X-Merchant-Id": config.merchantId, "X-Timestamp": timestamp, "X-Signature": signature },
-      redirect: "error",
+      // Do not forward the merchant signature through redirects.
+      redirect: "manual",
       signal: AbortSignal.timeout(8000),
     });
     if (!response.ok) return failed(`HTTP_${response.status}`);
@@ -81,6 +82,10 @@ async function queryHashpay(config: ReturnType<typeof parseHashpayConfig>, order
     if (order.id !== paymentOrderNo || order.merchantId !== config.merchantId || order.merchantNo !== orderNo || !Number.isFinite(value) || value <= 0 || currency !== config.currency.toUpperCase() || !["pending", "paid", "expired"].includes(String(order.status))) return failed("RESPONSE_MISMATCH");
     return result("HASHPAY", { verified: true, orderNo, paymentOrderNo, amount: Math.round(value * 100), currency, status: order.status === "paid" ? "PAID" : order.status === "expired" ? "FAILED" : "PENDING", message: "HASHPAY_QUERY" });
   } catch (error) {
+    const message = error instanceof Error ? error.message : "";
+    if (/redirect/i.test(message)) return failed(`${stage}_REDIRECT_ERROR`);
+    if (/signal|abort|timeout/i.test(message)) return failed(`${stage}_TIMEOUT_ERROR`);
+    if (/1042|same.zone|same zone/i.test(message)) return failed(`${stage}_WORKER_ROUTING_ERROR`);
     const name = error instanceof Error ? error.name.replace(/[^A-Za-z0-9_]/g, "").toUpperCase() : "UNKNOWN";
     return failed(`${stage}_${name}`);
   }
