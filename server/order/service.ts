@@ -147,7 +147,7 @@ export async function createOrder(database: D1Database, input: CreateOrderInput,
   const statements: D1PreparedStatement[] = [
     database.prepare("INSERT INTO `order` (orderNo, ownerUserId, productId, productSkuId, productNameSnapshot, productSkuNameSnapshot, unitPrice, quantity, amount, contactType, contactValue, contactEmailNormalized, buyerNote, addressSnapshotJson, paymentProvider, paymentChannel, fulfillmentSourceSnapshot, deliveryTypeSnapshot, fixedDeliveryContentSnapshot, physicalStockReserved, discountCodeId, discountCodeStr, originalAmount, discountAmount, createdAt, updatedAt) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)").bind(
       orderNo, ownerUserId, item.id, sku.id, item.name, sku.name, sku.price, quantity, amount, input.contactType, contactValue,
-      input.contactType === "EMAIL" ? normalizeOrderEmail(contactValue) : null, input.buyerNote?.trim() || null,
+      input.contactType === "EMAIL" || input.contactType === "OTHER" ? normalizeOrderEmail(contactValue) : null, input.buyerNote?.trim() || null,
       addressSnapshotJson, input.paymentProvider, paymentChannel, sku.fulfillmentSource, sku.deliveryType,
       sku.deliveryType === "FIXED_CARD" ? sku.fixedDeliveryContent!.trim() : null, reservePhysical ? 1 : 0,
       discountId, discountCodeValue, discountId === null ? null : originalAmount, discountId === null ? null : discountAmount,
@@ -364,7 +364,7 @@ export async function getOrderForQuery(database: D1Database, orderNo: string, ow
   const access = normalizedEmail
     ? and(
       isNull(order.ownerUserId),
-      eq(order.contactType, "EMAIL"),
+      inArray(order.contactType, ["EMAIL", "OTHER"]),
       eq(order.contactEmailNormalized, normalizedEmail),
     )
     : ownerUserId
