@@ -119,7 +119,7 @@ function onSlug() { slugTouched.value = true; }
 watch(() => values.name, (name) => { if (!slugTouched.value && !props.productId) setFieldValue("slug", slugifyProductName(name)); });
 
 function goBack() { void navigate(listPath); }
-function addSku() { skuDrafts.value.push({ clientKey: crypto.randomUUID(), productId: props.productId ?? 0, name: `新规格${skuDrafts.value.length + 1}`, price: "0.01", status: "ACTIVE", deliveryType: deliveryType.value, fixedDeliveryContent: "", physicalStock: null, minBuy: 1, maxBuy: 1, sort: skuDrafts.value.length }); }
+function addSku() { skuDrafts.value.push({ clientKey: crypto.randomUUID(), productId: props.productId ?? 0, name: `新规格${skuDrafts.value.length + 1}`, price: "0.01", status: "ACTIVE", deliveryType: deliveryType.value, fixedDeliveryContent: "", physicalStock: deliveryType.value === "MANUAL" || deliveryType.value === "EXPRESS" ? 0 : null, minBuy: 1, maxBuy: 1, sort: skuDrafts.value.length }); }
 function hasConfiguredSku() {
   return skuDrafts.value.some((sku) => Boolean(sku.id) || !/^新规格\d*$/.test(sku.name.trim()) || sku.price !== "0.01" || sku.fixedDeliveryContent.trim() !== "" || sku.physicalStock !== null || sku.minBuy !== 1 || sku.maxBuy !== 1);
 }
@@ -138,7 +138,7 @@ function changeDeliveryType(next: unknown) {
 
 function applyDeliveryType(next: ProductDeliveryType) {
   deliveryType.value = next;
-  skuDrafts.value.forEach((sku) => { sku.deliveryType = next; });
+  skuDrafts.value.forEach((sku) => { sku.deliveryType = next; if ((next === "MANUAL" || next === "EXPRESS") && sku.physicalStock === null) sku.physicalStock = 0; });
   if (!skuDrafts.value.length) addSku();
 }
 
