@@ -59,7 +59,7 @@ function result(provider: PaymentProviderKind, values: Partial<PaymentNotifyResu
 }
 
 async function queryHashpay(config: ReturnType<typeof parseHashpayConfig>, orderNo: string, paymentOrderNo?: string): Promise<PaymentNotifyResult> {
-  const failed = () => result("HASHPAY", { verified: false, orderNo, paymentOrderNo, status: "PENDING", message: "HASHPAY_QUERY_FAILED" });
+  const failed = (reason = "FAILED") => result("HASHPAY", { verified: false, orderNo, paymentOrderNo, status: "PENDING", message: `HASHPAY_QUERY_${reason}` });
   if (!paymentOrderNo) return failed();
   try {
     const path = `/api/order/${encodeURIComponent(paymentOrderNo)}`;
@@ -71,11 +71,11 @@ async function queryHashpay(config: ReturnType<typeof parseHashpayConfig>, order
       redirect: "error",
       signal: AbortSignal.timeout(8000),
     });
-    if (!response.ok) return failed();
+    if (!response.ok) return failed(`HTTP_${response.status}`);
     const order = await response.json() as Record<string, unknown>;
     const value = Number(order.amount);
     const currency = typeof order.currency === "string" ? order.currency.toUpperCase() : "";
-    if (order.id !== paymentOrderNo || order.merchantId !== config.merchantId || order.merchantNo !== orderNo || !Number.isFinite(value) || value <= 0 || currency !== config.currency.toUpperCase() || !["pending", "paid", "expired"].includes(String(order.status))) return failed();
+    if (order.id !== paymentOrderNo || order.merchantId !== config.merchantId || order.merchantNo !== orderNo || !Number.isFinite(value) || value <= 0 || currency !== config.currency.toUpperCase() || !["pending", "paid", "expired"].includes(String(order.status))) return failed("RESPONSE_MISMATCH");
     return result("HASHPAY", { verified: true, orderNo, paymentOrderNo, amount: Math.round(value * 100), currency, status: order.status === "paid" ? "PAID" : order.status === "expired" ? "FAILED" : "PENDING", message: "HASHPAY_QUERY" });
   } catch { return failed(); }
 }
@@ -128,6 +128,7 @@ export function createProviderAdapter(provider: PaymentProviderKind, config: Rec
         if (!merchantNo || typeof payload.orderId !== "string") throw new Error("HASHPAY_CALLBACK_INVALID");
         // Encryption protects confidentiality; confirm payment with the gateway itself.
         const confirmed = await queryHashpay(parsed, merchantNo, payload.orderId);
+        if (!confirmed.verified) return confirmed;
         if (confirmed.amount !== Math.round(Number(payload.amount) * 100) || confirmed.currency !== String(payload.currency).toUpperCase()) return result(provider, { verified: false, status: "FAILED", message: "HASHPAY_CALLBACK_MISMATCH" });
         return confirmed;
       } catch { return result(provider, { verified: false, status: "FAILED", message: "HASHPAY_CALLBACK_INVALID" }); }
