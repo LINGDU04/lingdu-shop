@@ -1,4 +1,4 @@
-import { and, count, eq, isNull } from "drizzle-orm";
+import { and, count, eq, inArray, isNull } from "drizzle-orm";
 import { getContext } from "telefunc";
 import { createDrizzleDb } from "@/database/drizzle";
 import { card, order, productSku } from "@/database/drizzle/schema";
@@ -43,7 +43,7 @@ function orderAccess(ownerUserId: string | null, email?: string) {
   if (normalizedEmail) {
     return and(
       isNull(order.ownerUserId),
-      eq(order.contactType, "EMAIL"),
+      inArray(order.contactType, ["EMAIL", "OTHER"]),
       eq(order.contactEmailNormalized, normalizedEmail),
     );
   }
