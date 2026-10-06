@@ -3,6 +3,9 @@
   "name": "lingdu-shop",
   "compatibility_date": "2026-03-12",
   "main": "vike:server-entry",
+  "vars": {
+    "ADMIN_PATH": "admin-325833f07df9124bcc"
+  },
   "send_email": [
     {
       "name": "EMAIL"
